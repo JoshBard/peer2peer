@@ -2,7 +2,7 @@
 import os
 import unittest
 import sqlite3
-from messenger import init_db, log_message
+from node import init_db, log_message
 
 class TestMessenger(unittest.TestCase):
     def setUp(self):
