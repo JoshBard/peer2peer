@@ -34,7 +34,7 @@ def log_message(timestamp, sender, receiver, content):
     conn.commit()
     conn.close()
 
-# === Socket Handlers ===
+# Socket threads
 
 def handle_receive(conn):
     while True:
@@ -50,55 +50,71 @@ def handle_receive(conn):
         except:
             break
 
-def handle_send(conn, send_queue):
+def handle_send(send_queue, conn_container):
     while True:
         if not send_queue:
-            time.sleep(0.1)
+            time.sleep(1)
             continue
 
-        message, msg_time = send_queue.pop(0)
+        message, msg_time = send_queue[0]
+
         if message.lower() == "exit":
-            conn.close()
+            if conn_container and conn_container[0]:
+                conn_container[0].close()
             break
 
         try:
-            conn.settimeout(10.0)
-            conn.sendall(message.encode())
-            print("Message sent.")
-            log_message(datetime.fromtimestamp(msg_time).isoformat(), "me", "peer", message)
-        except socket.timeout:
-            print("Failed to send message: timeout.")
+            if conn_container and conn_container[0]:
+                conn = conn_container[0]
+                conn.settimeout(10.0)
+                conn.sendall(message.encode())
+                print("Message sent.")
+                log_message(datetime.fromtimestamp(msg_time).isoformat(), "me", "peer", message)
+                send_queue.pop(0)  # Remove message after successful send
+            else:
+                print("Waiting for peer to connect...")
+        except (socket.timeout, BrokenPipeError, ConnectionResetError):
+            print("Failed to send message: peer unavailable. Retrying in 1 minute...")
+            if conn_container:
+                conn_container[0] = None
         except Exception as e:
-            print(f"Failed to send message: {e}")
+            print(f"Send error: {e}")
+        finally:
+            if conn_container and conn_container[0]:
+                conn_container[0].settimeout(None)
 
-        conn.settimeout(None)
+        time.sleep(60)
 
-# === Connection Setup ===
+# Connection functions
 
-def instantiate_socket(my_port, result_container):
+def instantiate_socket(my_port, server_conn):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind((HOST, my_port))
         s.listen()
         print(f"[Server] Listening on {HOST}:{my_port}...")
         conn, addr = s.accept()
         print(f"[Server] Connected by {addr}")
-        result_container.append(conn)
+        server_conn.append(conn)
 
-def connect_to_peer(peer_port, result_container):
+def maintain_client_connection(peer_port, conn_container):
     while True:
+        if conn_container and conn_container[0]:
+            time.sleep(1)
+            continue
+
         try:
             peer_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             peer_sock.connect((HOST, peer_port))
             print(f"[Client] Connected to peer at {HOST}:{peer_port}")
-            result_container.append(peer_sock)
-            break
+            conn_container.clear()
+            conn_container.append(peer_sock)
         except ConnectionRefusedError:
             time.sleep(1)
         except Exception as e:
-            print(f"[Client] Connection failed: {e}")
+            print(f"[Client] Connection attempt failed: {e}")
             time.sleep(1)
 
-# === Main App ===
+# Messaging loop
 
 def main():
     init_db()
@@ -109,22 +125,21 @@ def main():
     server_conn = []
     client_conn = []
 
-    server_thread = threading.Thread(target=instantiate_socket, args=(my_port, server_conn))
-    client_thread = threading.Thread(target=connect_to_peer, args=(peer_port, client_conn))
+    # Start server and client connection threads
+    threading.Thread(target=instantiate_socket, args=(my_port, server_conn), daemon=True).start()
+    threading.Thread(target=maintain_client_connection, args=(peer_port, client_conn), daemon=True).start()
+    while not server_conn:
+        time.sleep(0.5)
 
-    server_thread.start()
-    client_thread.start()
-
-    server_thread.join()
-    client_thread.join()
-
+    # Start receiving messages from peer
     recv_thread = threading.Thread(target=handle_receive, args=(server_conn[0],), daemon=True)
     recv_thread.start()
 
     send_queue = []
-    send_thread = threading.Thread(target=handle_send, args=(client_conn[0], send_queue), daemon=True)
+    send_thread = threading.Thread(target=handle_send, args=(send_queue, client_conn), daemon=True)
     send_thread.start()
 
+    # Main input loop
     while True:
         decision = input("Log off (Y/N)? ").strip().upper()
         if decision == 'Y':
