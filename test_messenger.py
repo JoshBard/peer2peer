@@ -4,6 +4,8 @@ import unittest
 import sqlite3
 from node import init_db, log_message
 
+# got some help from chatgpt with tests
+
 class TestMessenger(unittest.TestCase):
     def setUp(self):
         self.test_db = "test_messages.db"
