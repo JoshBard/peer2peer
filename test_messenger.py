@@ -2,7 +2,7 @@
 import os
 import unittest
 import sqlite3
-from messenger import init_db, log_message, DB_FILE
+from node import init_db, log_message, DB_FILE
 
 # helped by chatgpt for the testing
 
