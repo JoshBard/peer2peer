@@ -2,17 +2,12 @@
 import os
 import unittest
 import sqlite3
-from node import init_db, log_message, DB_FILE
-
-# helped by chatgpt for the testing
+from messenger import init_db, log_message
 
 class TestMessenger(unittest.TestCase):
     def setUp(self):
-        # Use a test-specific DB
         self.test_db = "test_messages.db"
-        global DB_FILE
-        DB_FILE = self.test_db
-        init_db()
+        init_db(self.test_db)
 
     def tearDown(self):
         if os.path.exists(self.test_db):
@@ -27,7 +22,7 @@ class TestMessenger(unittest.TestCase):
         self.assertIsNotNone(table)
 
     def test_log_message_inserts_data(self):
-        log_message("2025-03-30T12:00:00", "me", "peer", "Hello")
+        log_message("2025-03-30T12:00:00", "me", "peer", "Hello", self.test_db)
         conn = sqlite3.connect(self.test_db)
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM messages")

@@ -7,10 +7,10 @@ from datetime import datetime
 HOST = "127.0.0.1"
 DB_FILE = "messages.db"
 
-# === Database Setup ===
+# DB setup
 
-def init_db():
-    conn = sqlite3.connect(DB_FILE)
+def init_db(db_file=DB_FILE):
+    conn = sqlite3.connect(db_file)
     cursor = conn.cursor()
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS messages (
@@ -24,8 +24,8 @@ def init_db():
     conn.commit()
     conn.close()
 
-def log_message(timestamp, sender, receiver, content):
-    conn = sqlite3.connect(DB_FILE)
+def log_message(timestamp, sender, receiver, content, db_file=DB_FILE):
+    conn = sqlite3.connect(db_file)
     cursor = conn.cursor()
     cursor.execute('''
         INSERT INTO messages (timestamp, sender, receiver, content)
